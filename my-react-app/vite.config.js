@@ -7,8 +7,7 @@ export default defineConfig(({ mode }) => {
   
   return {
     plugins: [react()],
-
-    // Fix: Allow @vidstack/react CSS exports under Vite 8 / Rolldown strict resolution
+    base: "/",
     resolve: {
       conditions: ['browser', 'module', 'import', 'default'],
     },
@@ -39,12 +38,16 @@ export default defineConfig(({ mode }) => {
       // Optimize for production
       rollupOptions: {
         output: {
-          manualChunks: {
-            vendor: ['react', 'react-dom'],
-            aws: ['@aws-sdk/client-s3'],
-            video: ['hls.js'],
-            vidstack: ['@vidstack/react'],
+          manualChunks(id) {
+          if (id.includes('node_modules')) {
+            // This groups all node_modules into a single 'vendor' chunk
+            return 'vendor'; 
+            
+            // OR split them specifically:
+            // if (id.includes('react') || id.includes('react-dom')) return 'react-vendor';
+            // return 'other-vendor';
           }
+        }
         }
       }
     },

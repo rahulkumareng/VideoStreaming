@@ -3,7 +3,6 @@ const videoService = require("../services/videoFetch.service.js");
 async function getAllVideos(req, res) {
   try {
     const videos = await videoService.fetchVideos();
-    console.log(videos, 'sdfsdfsdfsdfsd')
     res.json(videos);
   } catch (err) {
     console.error("Error in getAllVideos controller:", err);
