@@ -11,6 +11,8 @@ const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { s3 } = require("../config/aws.js");
 
 const Bucket = process.env.S3_BUCKET;
+const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB — must match client-side chunkFile.js
+const PRESIGNED_URL_EXPIRY = 3600; // 1 hour
 
 async function initiate(body) {
   const { filename, contentType, size } = body;
@@ -21,36 +23,37 @@ async function initiate(body) {
 
   const key = `videos/${randomUUID()}/${filename}`;
 
-  const command = new CreateMultipartUploadCommand({
+  // Step 1: Create the multipart upload session
+  const createCommand = new CreateMultipartUploadCommand({
     Bucket,
     Key: key,
     ContentType: contentType,
   });
 
-  const response = await s3.send(command);
+  const { UploadId: uploadId } = await s3.send(createCommand);
+
+  // Step 2: Generate ALL presigned URLs upfront in parallel
+  // The client already knows the chunk count (size / CHUNK_SIZE), and we
+  // pre-sign every part here so the client never needs to call /presign.
+  const totalParts = Math.ceil(size / CHUNK_SIZE);
+
+  const urlPromises = Array.from({ length: totalParts }, (_, i) => {
+    const command = new UploadPartCommand({
+      Bucket,
+      Key: key,
+      UploadId: uploadId,
+      PartNumber: i + 1,
+    });
+    return getSignedUrl(s3, command, { expiresIn: PRESIGNED_URL_EXPIRY });
+  });
+
+  // All signatures are computed in parallel — nearly as fast as signing one
+  const urls = await Promise.all(urlPromises);
 
   return {
-    uploadId: response.UploadId,
+    uploadId,
     key,
-  };
-}
-
-async function presign(body) {
-  const { uploadId, key, partNumber } = body;
-
-  const command = new UploadPartCommand({
-    Bucket,
-    Key: key,
-    UploadId: uploadId,
-    PartNumber: partNumber,
-  });
-
-  const url = await getSignedUrl(s3, command, {
-    expiresIn: 3600,
-  });
-
-  return {
-    url,
+    urls, // array indexed 0..N-1; urls[i] is the presigned URL for part (i+1)
   };
 }
 
@@ -77,6 +80,5 @@ async function complete(body) {
 
 module.exports = {
   initiate,
-  presign,
   complete,
 };

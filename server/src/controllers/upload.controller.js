@@ -14,18 +14,6 @@ async function initiateUpload(req, res) {
   }
 }
 
-async function getPresignedUrl(req, res) {
-  try {
-    const result = await uploadService.presign(req.body);
-
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({
-      message: err.message,
-    });
-  }
-}
-
 async function completeUpload(req, res) {
   try {
     const result = await uploadService.complete(req.body);
@@ -40,6 +28,5 @@ async function completeUpload(req, res) {
 
 module.exports = {
   initiateUpload,
-  getPresignedUrl,
   completeUpload,
 };

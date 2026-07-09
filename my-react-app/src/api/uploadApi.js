@@ -7,8 +7,5 @@ const api = axios.create({
 export const initiateUpload = (payload) =>
   api.post("/uploads/initiate", payload);
 
-export const getPresignedUrl = (payload) =>
-  api.post("/uploads/presign", payload);
-
 export const completeUpload = (payload) =>
   api.post("/uploads/complete", payload);

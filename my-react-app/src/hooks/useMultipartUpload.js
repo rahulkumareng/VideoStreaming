@@ -1,10 +1,6 @@
 import { useState } from "react";
 import axios from "axios";
-import {
-  initiateUpload,
-  getPresignedUrl,
-  completeUpload,
-} from "../api/uploadApi";
+import { initiateUpload, completeUpload } from "../api/uploadApi";
 import { chunkFile } from "../utils/chunkFile";
 
 const MAX_CONCURRENT = 5;
@@ -16,15 +12,14 @@ export default function useMultipartUpload() {
   async function upload(file) {
     setUploading(true);
 
-    // Step 1: Create upload session
+    // Step 1: Create upload session + get ALL presigned URLs in one call
     const { data } = await initiateUpload({
       filename: file.name,
       contentType: file.type,
       size: file.size,
     });
 
-    const uploadId = data.uploadId;
-    const key = data.key;
+    const { uploadId, key, urls } = data;
 
     const chunks = chunkFile(file);
 
@@ -38,15 +33,8 @@ export default function useMultipartUpload() {
         const chunk = chunks[index];
         const partNumber = index + 1;
 
-        // Step 2: Get presigned URL
-        const { data } = await getPresignedUrl({
-          uploadId,
-          key,
-          partNumber,
-        });
-
-        // Step 3: Upload chunk to S3
-        const response = await axios.put(data.url, chunk, {
+        // Use the presigned URL returned by /initiate — no extra server call
+        const response = await axios.put(urls[index], chunk, {
           headers: {
             "Content-Type": "application/octet-stream",
           },
@@ -73,7 +61,7 @@ export default function useMultipartUpload() {
 
     uploadedParts.sort((a, b) => a.PartNumber - b.PartNumber);
 
-    // Step 4: Complete upload
+    // Step 2: Complete the upload
     await completeUpload({
       uploadId,
       key,
@@ -91,3 +79,4 @@ export default function useMultipartUpload() {
     uploading,
   };
 }
+
