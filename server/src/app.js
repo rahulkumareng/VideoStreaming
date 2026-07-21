@@ -12,19 +12,33 @@ app.use(express.json());
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/videos", videoRoutes);
 
-// Serve Vite static assets
-const clientDistPath = path.join(__dirname, '../../client/dist');
+const fs = require("fs");
 
-app.use(express.static(clientDistPath, {
-  maxAge: '1y',
-  etag: true,
-  lastModified: true,
-  index: false       // Prevent auto-serving index.html for asset paths
-}));
+// Serve Vite static assets (support both my-react-app/dist and client/dist)
+const myReactAppDist = path.join(__dirname, "../../my-react-app/dist");
+const clientDist = path.join(__dirname, "../../client/dist");
+const clientDistPath = fs.existsSync(myReactAppDist) ? myReactAppDist : clientDist;
 
-// ✅ ALTERNATIVE (Safest)
+app.use(
+  express.static(clientDistPath, {
+    maxAge: "1y",
+    etag: true,
+    lastModified: true,
+    index: false, // Prevent auto-serving index.html for asset paths
+  })
+);
+
 app.use((req, res) => {
-  res.sendFile(path.join(clientDistPath, 'index.html'));
+  const indexPath = path.join(clientDistPath, "index.html");
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res
+      .status(404)
+      .send(
+        "Frontend build (index.html) not found. Please run 'npm run build' in my-react-app."
+      );
+  }
 });
 
 module.exports = app;

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import Hls from "hls.js";
 import "./VideoPlayerV2.css";
+import { getManifestUrl, getThumbnailUrl } from "../../config/env";
 
 function VideoPlayer() {
   const { videoId } = useParams();
@@ -40,7 +41,12 @@ function VideoPlayer() {
   const loadVideo = async () => {
     try {
       const response = await axios.get(`/api/videos/${videoId}`);
-      setVideo(response.data);
+      const videoData = response.data;
+      setVideo({
+        ...videoData,
+        manifestUrl: getManifestUrl(videoData.videoId),
+        thumbnail: getThumbnailUrl(videoData.videoId),
+      });
       setLoading(false);
     } catch (err) {
       console.error("❌ Error loading video:", err);

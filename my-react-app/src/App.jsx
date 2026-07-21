@@ -37,7 +37,7 @@ function App() {
 
         <footer className="footer">
           <div className="footer-content">
-            <p>©️ 2026 StreamFlow. All rights reserved.</p>
+            <p>©️ 2026 streamclips. All rights reserved.</p>
           </div>
         </footer>
       </div>
@@ -60,7 +60,7 @@ function Navigation({ scrolled }) {
       <div className="nav-container">
         <div className="nav-left">
           <Link to="/" className="netflix-logo">
-            STREAMFLOW
+            streamclips
           </Link>
           <ul className="nav-links">
             <li>

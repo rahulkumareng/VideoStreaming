@@ -10,12 +10,20 @@ const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 const { s3 } = require("../config/aws.js");
 
-const Bucket = process.env.S3_BUCKET;
+function getBucket() {
+  const bucket = process.env.S3_BUCKET;
+  if (!bucket) {
+    throw new Error("S3_BUCKET environment variable is missing.");
+  }
+  return bucket;
+}
+
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB — must match client-side chunkFile.js
 const PRESIGNED_URL_EXPIRY = 3600; // 1 hour
 
 async function initiate(body) {
   const { filename, contentType, size } = body;
+  const Bucket = getBucket();
 
   if (size > 5 * 1024 * 1024 * 1024) {
     throw new Error("Max upload size exceeded");
@@ -59,6 +67,7 @@ async function initiate(body) {
 
 async function complete(body) {
   const { uploadId, key, parts } = body;
+  const Bucket = getBucket();
 
   const command = new CompleteMultipartUploadCommand({
     Bucket,

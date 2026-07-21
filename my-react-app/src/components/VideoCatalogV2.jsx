@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import Hls from "hls.js";
 import { getApiUrl, getThumbnailUrl, getManifestUrl } from "../config/env";
 import styles from "./VideoCatalogV2.module.css";
 
 const ACCENTS = ["#e50914", "#ffa53d", "#9b5de5", "#00c2d1"];
+const HOVER_PLAY_DELAY = 500; // ms — avoid firing HLS loads on quick mouse passes
 
 function VideoCatalog() {
   const [videos, setVideos] = useState([]);
@@ -27,13 +29,20 @@ function VideoCatalog() {
 
       const transformedVideos = response.data.map((video) => ({
         ...video,
-        thumbnail: getThumbnailUrl(video.videoId),
-        manifestUrl: getManifestUrl(video.videoId),
+        // Use API-provided URLs directly if available, fallback to config helpers
+        thumbnail: video.thumbnail || getThumbnailUrl(video.videoId),
+        manifestUrl: video.manifestUrl || getManifestUrl(video.videoId),
       }));
 
-      setVideos(transformedVideos);
-      if (transformedVideos.length > 0) {
-        setHeroVideo(transformedVideos[0]);
+      // Sort by createdAt descending (newest timestamp first)
+      const sortedVideos = [...transformedVideos].sort(
+        (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+      );
+
+      setVideos(sortedVideos);
+
+      if (sortedVideos.length > 0) {
+        setHeroVideo(sortedVideos[0]); // Always picks the newest upload
       }
     } catch (err) {
       console.error("Error loading videos:", err);
@@ -111,10 +120,129 @@ function VideoCatalog() {
 }
 
 function HeroSection({ video, navigate, accent }) {
+  const videoRef = useRef(null);
+  const hlsRef = useRef(null);
+
+  const [isVideoLoaded, setIsVideoLoaded] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
+
+  // Toggle Mute / Unmute
+  const toggleMute = () => {
+    if (videoRef.current) {
+      const newMutedState = !isMuted;
+
+      // Toggle native DOM properties
+      videoRef.current.muted = newMutedState;
+
+      if (!newMutedState) {
+        // Restore volume when unmuting
+        videoRef.current.volume = 1.0;
+      }
+
+      setIsMuted(newMutedState);
+    }
+  };
+
+  useEffect(() => {
+    if (!video || !video.manifestUrl) return;
+
+    const videoElement = videoRef.current;
+    if (!videoElement) return;
+
+    // Enforce mute for autoplay, but keep volume at normal level
+    videoElement.muted = true;
+    videoElement.defaultMuted = true;
+    videoElement.volume = 1.0; // <-- FIXED: Restored normal volume level
+
+    const manifest = video.manifestUrl;
+
+    const attemptNativePlay = () => {
+      videoElement.src = manifest;
+      videoElement
+        .play()
+        .then(() => setIsVideoLoaded(true))
+        .catch((err) => {
+          if (err.name !== "AbortError") {
+            console.warn("[StreamClips Hero] Native video play failed:", err);
+          }
+        });
+    };
+
+    const isHlsSupported = Hls.isSupported();
+    const isM3u8 = manifest.includes(".m3u8");
+
+    if (
+      isHlsSupported &&
+      (isM3u8 || !manifest.match(/\.(mp4|webm|ogg|mov)$/i))
+    ) {
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: false,
+        maxBufferLength: 10,
+      });
+
+      hls.loadSource(manifest);
+      hls.attachMedia(videoElement);
+
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        videoElement
+          .play()
+          .then(() => setIsVideoLoaded(true))
+          .catch((err) => {
+            if (err.name !== "AbortError") {
+              console.warn("[StreamClips Hero] HLS play failed:", err);
+            }
+          });
+      });
+
+      hls.on(Hls.Events.ERROR, (event, data) => {
+        if (data.fatal) {
+          hls.destroy();
+          hlsRef.current = null;
+          attemptNativePlay();
+        }
+      });
+
+      hlsRef.current = hls;
+    } else {
+      attemptNativePlay();
+    }
+
+    return () => {
+      setIsVideoLoaded(false);
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, [video?.videoId, video?.manifestUrl]);
+
   return (
     <div className={styles.heroSection}>
       <div className={styles.heroBackdrop}>
+        {/* Poster Image */}
         <img src={video.thumbnail} alt={video.title} />
+
+        {/* Hero Background Video Stream */}
+        <video
+          ref={videoRef}
+          muted
+          loop
+          playsInline
+          autoPlay
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            opacity: isVideoLoaded ? 1 : 0,
+            transition: "opacity 0.8s ease-in-out",
+            pointerEvents: "none",
+          }}
+        />
+
         <div className={styles.heroGradient}></div>
       </div>
 
@@ -139,6 +267,7 @@ function HeroSection({ video, navigate, accent }) {
           Watch your uploaded video in stunning quality. Stream instantly across
           all your devices with fast global CDN delivery.
         </p>
+
         <div className={styles.heroButtons}>
           <button
             className={styles.playBtn}
@@ -149,6 +278,7 @@ function HeroSection({ video, navigate, accent }) {
             </svg>
             Play
           </button>
+
           <button className={styles.infoBtn}>
             <svg
               width="22"
@@ -164,6 +294,42 @@ function HeroSection({ video, navigate, accent }) {
             </svg>
             More Info
           </button>
+
+          {/* Sound Toggle Button */}
+          {isVideoLoaded && (
+            <button
+              className={styles.infoBtn}
+              onClick={toggleMute}
+              style={{ padding: "13px", borderRadius: "50%" }}
+              title={isMuted ? "Unmute" : "Mute"}
+            >
+              {isMuted ? (
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <line x1="1" y1="1" x2="23" y2="23"></line>
+                  <path d="M9 9v6a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
+                </svg>
+              ) : (
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                </svg>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -172,7 +338,6 @@ function HeroSection({ video, navigate, accent }) {
 
 function VideoRow({ title, videos, formatDuration, navigate }) {
   const rowContentRef = useRef(null);
-  const [visibleIds, setVisibleIds] = useState(new Set());
 
   // Function to handle custom native sliding mechanics via button anchors
   const scrollTrack = (direction) => {
@@ -186,39 +351,6 @@ function VideoRow({ title, videos, formatDuration, navigate }) {
     }
   };
 
-  useEffect(() => {
-    const container = rowContentRef.current;
-    if (!container) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        setVisibleIds((prev) => {
-          const next = new Set(prev);
-          entries.forEach((entry) => {
-            const vId = entry.target.dataset.id;
-            if (vId) {
-              if (entry.intersectionRatio >= 0.99) {
-                next.add(vId);
-              } else {
-                next.delete(vId);
-              }
-            }
-          });
-          return next;
-        });
-      },
-      {
-        root: container,
-        threshold: 0.99,
-      },
-    );
-
-    const cards = container.querySelectorAll(`.${styles.videoCard}`);
-    cards.forEach((card) => observer.observe(card));
-
-    return () => observer.disconnect();
-  }, [videos]);
-
   return (
     <div className={styles.rowContainer}>
       <h2 className={styles.rowTitle}>{title}</h2>
@@ -231,19 +363,15 @@ function VideoRow({ title, videos, formatDuration, navigate }) {
       </button>
 
       <div ref={rowContentRef} className={styles.rowContent}>
-        {videos.map((video, index) => {
-          const isFullyVisible = visibleIds.has(String(video.videoId));
-          return (
-            <VideoCard
-              key={video.videoId}
-              video={video}
-              index={index}
-              isFullyVisible={isFullyVisible}
-              formatDuration={formatDuration}
-              navigate={navigate}
-            />
-          );
-        })}
+        {videos.map((video, index) => (
+          <VideoCard
+            key={video.videoId}
+            video={video}
+            index={index}
+            formatDuration={formatDuration}
+            navigate={navigate}
+          />
+        ))}
       </div>
 
       <button
@@ -256,18 +384,165 @@ function VideoRow({ title, videos, formatDuration, navigate }) {
   );
 }
 
-function VideoCard({ video, index, isFullyVisible, formatDuration, navigate }) {
+function VideoCard({ video, index, formatDuration, navigate }) {
   const accent = ACCENTS[index % ACCENTS.length];
+  const videoRef = useRef(null);
+  const hlsRef = useRef(null);
+  const hoverTimeoutRef = useRef(null);
+
+  const [isPreviewActive, setIsPreviewActive] = useState(false);
+  const [hasError, setHasError] = useState(false);
+
+  // Snappy hover activation (200ms delay)
+  const startPreview = () => {
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    hoverTimeoutRef.current = setTimeout(() => {
+      setIsPreviewActive(true);
+    }, 200);
+  };
+
+  const stopPreview = () => {
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    setIsPreviewActive(false);
+    setHasError(false);
+  };
+
+  useEffect(() => {
+    if (!isPreviewActive) return;
+
+    const videoElement = videoRef.current;
+    if (!videoElement) return;
+
+    // Direct property assignment for browser autoplay compliance
+    videoElement.muted = true;
+    videoElement.defaultMuted = true;
+    videoElement.volume = 0;
+
+    const manifest = video.manifestUrl;
+
+    if (!manifest) {
+      setHasError(true);
+      return;
+    }
+
+    const attemptNativePlay = () => {
+      videoElement.src = manifest;
+      videoElement.play().catch((err) => {
+        if (err.name !== "AbortError") {
+          console.warn("[StreamClips] Native playback blocked/failed:", err);
+        }
+      });
+    };
+
+    const isHlsSupported = Hls.isSupported();
+    const isM3u8 = manifest.includes(".m3u8");
+
+    // Use HLS.js if supported AND URL looks like an HLS manifest
+    if (
+      isHlsSupported &&
+      (isM3u8 || !manifest.match(/\.(mp4|webm|ogg|mov)$/i))
+    ) {
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: false,
+        maxBufferLength: 5,
+      });
+
+      hls.loadSource(manifest);
+      hls.attachMedia(videoElement);
+
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        videoElement.play().catch((err) => {
+          if (err.name !== "AbortError") {
+            console.warn("[StreamClips] HLS Autoplay blocked:", err);
+          }
+        });
+      });
+
+      hls.on(Hls.Events.ERROR, (event, data) => {
+        if (data.fatal) {
+          console.warn(
+            "[StreamClips] HLS fatal error encountered:",
+            data.type,
+            data.details,
+          );
+          hls.destroy();
+          hlsRef.current = null;
+          // Fallback to standard MP4 playback
+          attemptNativePlay();
+        }
+      });
+
+      hlsRef.current = hls;
+    } else {
+      // Standard MP4 video file fallback
+      attemptNativePlay();
+    }
+
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, [isPreviewActive, video.manifestUrl, video.videoId]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, []);
 
   return (
     <div
       data-id={video.videoId}
-      className={`${styles.videoCard} ${!isFullyVisible ? styles.clippedEdge : ""}`}
+      className={styles.videoCard}
       style={{ animationDelay: `${index * 50}ms`, "--card-accent": accent }}
       onClick={() => navigate(`/watch/${video.videoId}`)}
+      onMouseEnter={startPreview}
+      onMouseLeave={stopPreview}
     >
       <div className={styles.cardThumbnail}>
-        <img src={video.thumbnail} alt={video.title} loading="lazy" />
+        {/* Base Thumbnail */}
+        <img
+          src={video.thumbnail}
+          alt={video.title}
+          loading="lazy"
+          style={{
+            display: "block",
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+          }}
+        />
+
+        {/* Video Overlay stacked directly on top */}
+        {isPreviewActive && !hasError && (
+          <video
+            ref={videoRef}
+            muted
+            loop
+            playsInline
+            autoPlay
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              zIndex: 1,
+              pointerEvents: "none",
+              backgroundColor: "#000",
+            }}
+          />
+        )}
+
         <div className={styles.cardOverlay}>
           <div className={styles.cardActions}>
             <button
@@ -284,10 +559,7 @@ function VideoCard({ video, index, isFullyVisible, formatDuration, navigate }) {
 
             <button
               className={`${styles.actionBtn} ${styles.info}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                // Add your custom programmatic model view overrides here if needed
-              }}
+              onClick={(e) => e.stopPropagation()}
             >
               <svg
                 width="16"

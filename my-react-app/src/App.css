@@ -1,12 +1,29 @@
 /* ==========================================================================
    GLOBAL STRUCTURE SETUP
    ========================================================================== */
+html {
+  scroll-behavior: smooth;
+  /* Prevent the page itself from rubber-banding on overscroll,
+     which fights with horizontal row scroll containers */
+  overscroll-behavior-y: none;
+}
+
 body {
   margin: 0;
   background-color: #141414;
   color: #ffffff;
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* Clip horizontal overflow at body level so no horizontal scrollbar appears */
+  overflow-x: hidden;
+}
+
+body {
+  background-color: #0a0a0a; /* was #141414 — noticeably more premium/cinematic */
+}
+
+.netflixCatalog {
+  background: #0a0a0a;
 }
 
 .app {
@@ -35,7 +52,8 @@ body {
   align-items: center;
   background: linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0.8) 0%,
+    rgba(0, 0, 0, 0.9) 0%,
+    rgba(0, 0, 0, 0.4) 60%,
     transparent 100%
   );
   transition:
@@ -197,4 +215,95 @@ body {
   font-size: 14px;
   margin: 0;
   letter-spacing: 0.5px;
+}
+
+/* ==========================================================================
+   RESPONSIVE BREAKPOINTS
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   TABLET  (≤ 768px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+  .navbar {
+    height: 56px;
+  }
+
+  .main-content {
+    margin-top: 56px;
+  }
+
+  .netflix-logo {
+    font-size: 20px;
+  }
+
+  /* Hide nav links on tablet — not enough room */
+  .nav-links {
+    display: none;
+  }
+
+  .nav-left,
+  .nav-right {
+    gap: 14px;
+  }
+
+  .upload-btn span {
+    display: none; /* Show icon only, hide "Upload" text */
+  }
+
+  .upload-btn {
+    padding: 8px 10px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   MOBILE  (≤ 480px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 480px) {
+  .navbar {
+    height: 50px;
+  }
+
+  .main-content {
+    margin-top: 50px;
+  }
+
+  .nav-container {
+    padding: 0 4%;
+  }
+
+  .netflix-logo {
+    font-size: 18px;
+  }
+
+  .nav-links {
+    display: none;
+  }
+
+  .nav-left,
+  .nav-right {
+    gap: 10px;
+  }
+
+  .upload-btn {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+
+  .upload-btn span {
+    display: none;
+  }
+
+  .avatar-img {
+    width: 28px;
+    height: 28px;
+  }
+
+  .footer {
+    padding: 24px 0;
+  }
+
+  .footer p {
+    font-size: 12px;
+  }
 }

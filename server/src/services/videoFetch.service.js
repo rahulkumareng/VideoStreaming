@@ -55,8 +55,6 @@ async function fetchVideoById(videoId) {
   return {
     videoId,
     title: videoId.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-    thumbnail: `https://${CLOUDFRONT_DOMAIN}/hls/${videoId}/thumbnail.jpg`,
-    manifestUrl: `https://${CLOUDFRONT_DOMAIN}/hls/${videoId}/master.m3u8`,
     duration: parseFloat(metadata.duration_seconds),
     resolution: `${metadata.video.width}x${metadata.video.height}`,
     createdAt: metadata.created_at || new Date().toISOString()

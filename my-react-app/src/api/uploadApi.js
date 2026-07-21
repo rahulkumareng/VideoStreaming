@@ -1,7 +1,8 @@
 import axios from "axios";
+import { getApiUrl } from "../config/env";
 
 const api = axios.create({
-  baseURL: "http://localhost:3000/api",
+  baseURL: getApiUrl("/api"),
 });
 
 export const initiateUpload = (payload) =>
