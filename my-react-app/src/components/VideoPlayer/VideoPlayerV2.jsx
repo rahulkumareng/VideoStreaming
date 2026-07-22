@@ -40,7 +40,8 @@ function VideoPlayer() {
 
   const loadVideo = async () => {
     try {
-      const response = await axios.get(`/api/videos/${videoId}`);
+      const url = getApiUrl(`/api/videos/${videoId}`);
+      const response = await axios.get(url);
       const videoData = response.data;
       setVideo({
         ...videoData,
@@ -368,11 +369,9 @@ function VideoPlayer() {
                 onChange={handleScrubChange}
                 className="scrub-timeline"
                 style={{
-                  background: `linear-gradient(to right, #e50914 0%, #e50914 ${
-                    (currentTime / (duration || 1)) * 100
-                  }%, rgba(255, 255, 255, 0.2) ${
-                    (currentTime / (duration || 1)) * 100
-                  }%, rgba(255, 255, 255, 0.2) 100%)`,
+                  background: `linear-gradient(to right, #e50914 0%, #e50914 ${(currentTime / (duration || 1)) * 100
+                    }%, rgba(255, 255, 255, 0.2) ${(currentTime / (duration || 1)) * 100
+                    }%, rgba(255, 255, 255, 0.2) 100%)`,
                 }}
               />
               <span className="time-stamp">{formatTime(duration)}</span>
