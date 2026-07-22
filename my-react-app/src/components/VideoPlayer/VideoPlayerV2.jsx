@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import Hls from "hls.js";
 import "./VideoPlayerV2.css";
-import { getManifestUrl, getThumbnailUrl } from "../../config/env";
+import { getApiUrl, getManifestUrl, getThumbnailUrl } from "../../config/env";
 
 function VideoPlayer() {
   const { videoId } = useParams();
